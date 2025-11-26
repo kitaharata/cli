@@ -44,6 +44,8 @@ export const searchArgs: TakoArgs = {
   },
   metadata: {
     help: 'Search Hono documentation',
+    required: true,
+    placeholder: '<query>',
     options: {
       limit: {
         help: 'Number of results to show (default: 5)',
@@ -57,10 +59,6 @@ export const searchArgs: TakoArgs = {
 }
 
 export const searchValidation: TakoHandler = async (c, next) => {
-  if (!c.scriptArgs.positionals[0]) {
-    c.print({ message: 'Error: Missing required argument "query"', style: 'red', level: 'error' })
-    return
-  }
   const { limit } = c.scriptArgs.values as { limit?: string }
   if (limit) {
     const parsed = parseInt(limit, 10)
@@ -187,7 +185,7 @@ export const searchCommand: TakoHandler = async (c) => {
       })
     } else {
       // Remove highlighted title from JSON output
-      const jsonResults = results.map(({ ...result }) => result)
+      const jsonResults = results.map(({ highlightedTitle, ...result }) => result)
       c.print({
         message: JSON.stringify(
           {

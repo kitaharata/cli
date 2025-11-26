@@ -25,9 +25,46 @@ async function fetchAndDisplayContent(c: Tako, url: string, fallbackUrl?: string
   }
 }
 
+async function getPath(c: Tako): Promise<string | undefined> {
+  const pathFromArgs = c.scriptArgs.positionals[0]
+  if (pathFromArgs) {
+    return pathFromArgs
+  }
+
+  // If no path provided, check for stdin input
+  // Check if stdin is piped (not a TTY)
+  if (process.stdin.isTTY) {
+    return
+  }
+
+  try {
+    const chunks: Buffer[] = []
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk)
+    }
+    const stdinInput = Buffer.concat(chunks).toString().trim()
+    if (!stdinInput) {
+      return
+    }
+    // Remove quotes if present (handles jq output without -r flag)
+    return stdinInput.replace(/^["'](.*)["']$/, '$1')
+  } catch (error) {
+    c.print({
+      message: [
+        'Error reading from stdin:',
+        error instanceof Error ? error.message : String(error),
+      ],
+      style: 'red',
+      level: 'error',
+    })
+    return
+  }
+}
+
 export const docsArgs: TakoArgs = {
   metadata: {
     help: 'Display Hono documentation',
+    placeholder: '[path]',
   },
 }
 
@@ -36,40 +73,13 @@ export const docsValidation: TakoHandler = async (_c, next) => {
 }
 
 export const docsCommand: TakoHandler = async (c) => {
-  let finalPath = c.scriptArgs.positionals[0]
+  const finalPath = await getPath(c)
 
-  // If no path provided, check for stdin input
   if (!finalPath) {
-    // Check if stdin is piped (not a TTY)
-    if (!process.stdin.isTTY) {
-      try {
-        const chunks: Buffer[] = []
-        for await (const chunk of process.stdin) {
-          chunks.push(chunk)
-        }
-        const stdinInput = Buffer.concat(chunks).toString().trim()
-        if (stdinInput) {
-          // Remove quotes if present (handles jq output without -r flag)
-          finalPath = stdinInput.replace(/^["'](.*)["']$/, '$1')
-        }
-      } catch (error) {
-        c.print({
-          message: [
-            'Error reading from stdin:',
-            error instanceof Error ? error.message : String(error),
-          ],
-          style: 'red',
-          level: 'error',
-        })
-      }
-    }
-
     // If still no path, fetch llms.txt
-    if (!finalPath) {
-      c.print({ message: 'Fetching Hono documentation...' })
-      await fetchAndDisplayContent(c, 'https://hono.dev/llms.txt')
-      return
-    }
+    c.print({ message: 'Fetching Hono documentation...' })
+    await fetchAndDisplayContent(c, 'https://hono.dev/llms.txt')
+    return
   }
 
   // Ensure path starts with /

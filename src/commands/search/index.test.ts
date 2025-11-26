@@ -63,14 +63,12 @@ describe('Search Command', () => {
       results: [
         {
           title: 'Getting Started',
-          highlightedTitle: 'Getting Started',
           category: '',
           url: 'https://hono.dev/docs/getting-started',
           path: '/docs/getting-started',
         },
         {
           title: 'Middleware',
-          highlightedTitle: 'Middleware',
           category: 'Basic Usage',
           url: 'https://hono.dev/docs/middleware',
           path: '/docs/middleware',

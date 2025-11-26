@@ -1,4 +1,5 @@
 import * as esbuild from 'esbuild'
+import { Buffer } from 'node:buffer'
 import { extname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 

@@ -34,6 +34,7 @@ export const serveArgs: TakoArgs = {
   },
   metadata: {
     help: 'Start server',
+    placeholder: '[entry]',
     options: {
       port: {
         help: 'port number',
