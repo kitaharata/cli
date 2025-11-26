@@ -1,7 +1,6 @@
 import * as esbuild from 'esbuild'
+import type { Hono } from 'hono'
 import { Buffer } from 'node:buffer'
-import { extname } from 'node:path'
-import { pathToFileURL } from 'node:url'
 
 export interface BuildOptions {
   external?: string[]

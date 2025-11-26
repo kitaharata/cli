@@ -1,6 +1,9 @@
 import { Tako } from '@takojs/tako'
-import { Hono } from 'hono'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { execFile } from 'node:child_process'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as process from 'node:process'
 import { serveArgs, serveCommand, serveValidation } from './index.js'
 
@@ -26,6 +29,7 @@ vi.mock('./builtin-map.js', () => ({
 
 describe('serveCommand', () => {
   let tako: Tako
+  let mockEsbuild: any
   let mockModules: any
   let mockServe: any
   let mockShowRoutes: any
@@ -54,11 +58,6 @@ describe('serveCommand', () => {
   })
 
   it('should start server with default port', async () => {
-    mockModules.existsSync.mockReturnValue(false)
-    mockModules.resolve.mockImplementation((cwd: string, path: string) => {
-      return `${cwd}/${path}`
-    })
-
     await tako.cli({ config: { args: ['serve'] } })
 
     // Verify serve was called with default port 7070
@@ -72,11 +71,6 @@ describe('serveCommand', () => {
   })
 
   it('should start server with custom port', async () => {
-    mockModules.existsSync.mockReturnValue(false)
-    mockModules.resolve.mockImplementation((cwd: string, path: string) => {
-      return `${cwd}/${path}`
-    })
-
     await tako.cli({ config: { args: ['serve', '-p', '8080'] } })
 
     // Verify serve was called with custom port
@@ -122,7 +116,7 @@ export default app
       })
     })
 
-    await tako.cli({ config: { args: ['serve', 'app.js'] } })
+    await tako.cli({ config: { args: ['serve', appFile] } })
 
     // Test the captured fetch function
     const rootRequest = new Request('http://localhost:7070/')
@@ -136,11 +130,6 @@ export default app
   })
 
   it('should return 404 for non-existent routes when no app file exists', async () => {
-    mockModules.existsSync.mockReturnValue(false)
-    mockModules.resolve.mockImplementation((cwd: string, path: string) => {
-      return `${cwd}/${path}`
-    })
-
     await tako.cli({ config: { args: ['serve'] } })
 
     // Test 404 behavior with default empty app

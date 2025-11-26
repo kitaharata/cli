@@ -12,15 +12,12 @@ interface RequestOptions {
   data?: string
   header?: string[]
   path?: string
-  watch: boolean
 }
 
-async function executeRequest(
-  c: Tako
-): Promise<{ status: number; body: string; headers: Record<string, string> } | undefined> {
-  const appPath = c.scriptArgs.positionals[0]
-  const { path: requestPath, method, data, header } = c.scriptArgs.values as RequestOptions
-
+export function getBuildIterator(
+  appPath: string | undefined,
+  watch: boolean
+): AsyncGenerator<Hono> {
   // Determine entry file path
   let entry: string
   let resolvedAppPath: string
@@ -37,70 +34,66 @@ async function executeRequest(
     resolvedAppPath = resolve(process.cwd(), entry)
   }
 
-  try {
-    if (!existsSync(resolvedAppPath)) {
-      throw new Error(`Entry file ${entry} does not exist`)
-    }
+  if (!existsSync(resolvedAppPath)) {
+    throw new Error(`Entry file ${entry} does not exist`)
+  }
 
-    const appFilePath = realpathSync(resolvedAppPath)
-    const app: Hono = await buildAndImportApp(appFilePath, {
-      external: ['@hono/node-server'],
-    })
+  const appFilePath = realpathSync(resolvedAppPath)
+  return buildAndImportApp(appFilePath, {
+    external: ['@hono/node-server'],
+    watch,
+  })
+}
 
-    if (!app || typeof app.request !== 'function') {
-      throw new Error('No valid Hono app exported from the file')
-    }
+async function executeRequest(
+  c: Tako,
+  app: Hono
+): Promise<{ status: number; body: string; headers: Record<string, string> }> {
+  if (!app || typeof app.request !== 'function') {
+    throw new Error('No valid Hono app exported from the file')
+  }
 
-    // Build request
-    const url = new URL(requestPath || '/', 'http://localhost')
-    const requestInit: RequestInit = {
-      method: method || 'GET',
-    }
+  const { path: requestPath, method, data, header } = c.scriptArgs.values as RequestOptions
 
-    // Add request body if provided
-    if (data) {
-      requestInit.body = data
-    }
+  // Build request
+  const url = new URL(requestPath || '/', 'http://localhost')
+  const requestInit: RequestInit = {
+    method: method || 'GET',
+  }
 
-    // Add headers if provided
-    if (header && header.length > 0) {
-      const headers = new Headers()
-      for (const h of header) {
-        const [key, value] = h.split(':', 2)
-        if (key && value) {
-          headers.set(key.trim(), value.trim())
-        }
+  // Add request body if provided
+  if (data) {
+    requestInit.body = data
+  }
+
+  // Add headers if provided
+  if (header && header.length > 0) {
+    const headers = new Headers()
+    for (const h of header) {
+      const [key, value] = h.split(':', 2)
+      if (key && value) {
+        headers.set(key.trim(), value.trim())
       }
-      requestInit.headers = headers
     }
+    requestInit.headers = headers
+  }
 
-    // Execute request
-    const request = new Request(url.href, requestInit)
-    const response = await app.request(request)
+  // Execute request
+  const request = new Request(url.href, requestInit)
+  const response = await app.request(request)
 
-    // Convert response to our format
-    const responseHeaders: Record<string, string> = {}
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value
-    })
+  // Convert response to our format
+  const responseHeaders: Record<string, string> = {}
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value
+  })
 
-    const body = await response.text()
+  const body = await response.text()
 
-    return {
-      status: response.status,
-      body,
-      headers: responseHeaders,
-    }
-  } catch (error) {
-    c.print({
-      message: [
-        'Error processing request:',
-        error instanceof Error ? error.message : String(error),
-      ],
-      style: 'red',
-      level: 'error',
-    })
-    return
+  return {
+    status: response.status,
+    body,
+    headers: responseHeaders,
   }
 }
 
@@ -126,6 +119,11 @@ export const requestArgs: TakoArgs = {
         short: 'H',
         multiple: true,
       },
+      watch: {
+        type: 'boolean',
+        short: 'w',
+        default: false,
+      },
     },
   },
   metadata: {
@@ -148,6 +146,10 @@ export const requestArgs: TakoArgs = {
         help: 'Custom headers',
         placeholder: '<header>',
       },
+      watch: {
+        help: 'Watch for changes and resend request',
+        placeholder: '<header>',
+      },
     },
   },
 }
@@ -157,8 +159,22 @@ export const requestValidation: TakoHandler = async (_c, next) => {
 }
 
 export const requestCommand: TakoHandler = async (c) => {
-  const result = await executeRequest(c)
-  if (result) {
-    c.print({ message: JSON.stringify(result, null, 2) })
+  try {
+    const file = c.scriptArgs.positionals[0]
+    const { watch } = c.scriptArgs.values as { watch: boolean }
+
+    const buildIterator = getBuildIterator(file, watch)
+    for await (const app of buildIterator) {
+      const result = await executeRequest(c, app)
+      if (result) {
+        c.print({ message: JSON.stringify(result, null, 2) })
+      }
+    }
+  } catch (error) {
+    c.print({
+      message: ['Error:', error instanceof Error ? error.message : String(error)],
+      style: 'red',
+      level: 'error',
+    })
   }
 }

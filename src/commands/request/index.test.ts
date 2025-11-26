@@ -106,7 +106,7 @@ describe('requestCommand', () => {
     const expectedPath = 'test-app.js'
     setupBasicMocks(expectedPath, mockApp)
 
-    await program.parseAsync(['node', 'test', 'request', '-w', '-P', '/', 'test-app.js'])
+    await tako.cli({ config: { args: ['request', '-w', '-P', '/', 'test-app.js'] } })
 
     // Verify resolve was called with correct arguments
     expect(mockModules.resolve).toHaveBeenCalledWith(process.cwd(), 'test-app.js')
